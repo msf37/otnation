@@ -1,0 +1,756 @@
+Below is a simple technical requirements draft for the platform.
+
+# SCADA Exposure Discovery and Vulnerability Detection Platform
+
+**Technical Requirements Draft**
+**Implementation language:** Go (Golang)
+
+## 1. Purpose
+
+Build a security platform that helps identify internet-exposed SCADA and SCADA-like systems for a selected identity. The platform should support asset discovery, enrichment, service detection, protocol-aware analysis, and optional external enrichment.
+
+The goal is to allow an analyst to:
+
+* create an identity
+* seed the identity with IPs and domains
+* discover related assets
+* enrich those assets
+* detect exposed SCADA-relevant services
+* analyze banners and indicators
+* identify possible vulnerabilities and risky exposures
+
+This platform is for asset visibility and security assessment of selected targets.
+
+---
+
+## 2. Main Workflow
+
+### 2.1 Identity creation
+
+The user creates an identity and provides information such as:
+
+* identity name
+* organization name
+* known domains
+* known IP addresses
+* optional notes
+* tags or sector classification
+
+Example identities:
+
+* power utility
+* oil and gas operator
+* water treatment company
+* manufacturing group
+
+---
+
+### 2.2 Discovery stage
+
+After the identity is created, the user starts the discovery stage using:
+
+* a list of IP addresses
+* a list of domain names
+* or both
+
+Discovery expands the initial seeds into a broader asset set.
+
+---
+
+### 2.3 IP-based discovery
+
+For each input IP:
+
+* identify the subnet or related network range
+* enrich the IP with:
+
+  * country code
+  * ASN
+  * organization / ISP
+  * category or classification
+* mark whether the IP is private, public, reserved, or cloud-hosted if possible
+
+The discovered IPs become candidates for scanning.
+
+---
+
+### 2.4 Domain-based discovery
+
+For each input domain:
+
+* perform subdomain enumeration
+* resolve DNS records:
+
+  * A
+  * AAAA
+  * CNAME
+* collect the resulting IPs from A and AAAA
+* add those IPs into the IP discovery/enrichment pipeline
+* keep the DNS relationships between:
+
+  * domain
+  * subdomain
+  * cname target
+  * resolved ip
+
+---
+
+### 2.5 Crawling and service extraction
+
+For discovered domains:
+
+* crawl HTTP/HTTPS endpoints when applicable
+* collect basic metadata such as:
+
+  * title
+  * server header
+  * response headers
+  * favicon hash
+  * login pages
+  * industrial product names if visible
+* extract clues that indicate services or vendors
+
+This helps identify exposed web interfaces related to ICS/SCADA environments.
+
+---
+
+### 2.6 Port scanning for SCADA-relevant services
+
+For discovered IPs:
+
+* scan ports commonly associated with SCADA or SCADA-like systems
+* store open ports
+* perform banner grabbing where possible
+* classify the protocol or probable service
+* link scan results to the IP and identity
+
+Examples of service families to look for:
+
+* Modbus
+* DNP3
+* BACnet
+* Siemens S7
+* EtherNet/IP
+* IEC protocols
+* OPC-related services
+* MQTT when used in industrial environments
+* web HMIs
+* remote access gateways
+* engineering workstations exposed remotely
+
+The system should focus on configurable SCADA-related ports rather than scanning all ports by default.
+
+---
+
+### 2.7 Banner analysis
+
+The platform should normalize and sort banners, then analyze them for:
+
+* vendor name
+* product family
+* model clues
+* firmware or software version
+* protocol markers
+* default or weak service exposure indicators
+* risk classification
+
+The result should be structured data rather than only raw banners.
+
+---
+
+### 2.8 Optional external enrichment
+
+For selected IPs, the user can trigger deeper enrichment through Shodan.
+
+This stage should fetch:
+
+* known services
+* historical exposure data if available
+* additional banners
+* organization details
+* geolocation
+* tags
+* vulnerability hints when available
+
+This enrichment is optional because it may cost API quota and should not be run automatically for all IPs unless configured.
+
+---
+
+## 3. Functional Requirements
+
+## 3.1 Identity management
+
+The platform must support:
+
+* create identity
+* update identity
+* delete identity
+* list identities
+* attach notes and tags
+* track discovery runs per identity
+
+Each identity should act as the main grouping unit for all discovered assets.
+
+---
+
+## 3.2 Seed input management
+
+The platform must allow users to submit:
+
+* single IP
+* list of IPs
+* CIDR ranges
+* single domain
+* list of domains
+
+The system should validate all inputs before processing.
+
+---
+
+## 3.3 Asset discovery
+
+The platform must:
+
+* expand IPs into related subnets or related network assets based on defined rules
+* enumerate subdomains for domains
+* resolve DNS records
+* deduplicate results
+* maintain provenance showing where each asset came from
+
+Example provenance:
+
+* input by user
+* derived from DNS
+* derived from subnet expansion
+* derived from crawl
+* derived from external enrichment
+
+---
+
+## 3.4 Asset enrichment
+
+The platform must enrich IPs and domains with metadata such as:
+
+### IP enrichment
+
+* ASN
+* country
+* network owner
+* hosting/provider data
+* asset category
+* reverse DNS if available
+
+### Domain enrichment
+
+* record types
+* registrar-related details if available
+* DNS chain
+* associated IPs
+* web metadata if crawl succeeds
+
+---
+
+## 3.5 Scanning
+
+The platform must support:
+
+* targeted TCP scanning
+* optional UDP probing for selected industrial protocols
+* banner collection
+* timeout and retry controls
+* rate limiting
+* worker concurrency controls
+* scan profiles for different depth levels
+
+Example profiles:
+
+* light
+* standard
+* deep
+
+---
+
+## 3.6 Service classification
+
+The platform must classify services into categories such as:
+
+* industrial protocol
+* remote access
+* web interface
+* VPN / gateway
+* database
+* generic IT service
+* unknown
+
+It should also allow confidence scoring.
+
+---
+
+## 3.7 Vulnerability and exposure analysis
+
+The platform must analyze findings and detect:
+
+* publicly exposed industrial protocols
+* outdated versions when banner/version mapping is available
+* insecure remote access exposure
+* default or weak configuration indicators
+* web interfaces exposing vendor product panels
+* possible CVE matches based on version fingerprints
+* misclassified assets that still look industrial
+
+This should produce findings with severity levels such as:
+
+* critical
+* high
+* medium
+* low
+* informational
+
+---
+
+## 3.8 External enrichment integration
+
+The platform must allow:
+
+* manual Shodan lookup on selected IP
+* storing Shodan results
+* merging Shodan data with internally collected data
+* showing source of each data point
+
+---
+
+## 3.9 Results and reporting
+
+The platform must provide:
+
+* per identity overview
+* discovered IPs and domains
+* discovered subnets
+* open ports and services
+* banners
+* findings and risk summary
+* exportable report formats such as JSON and CSV
+
+---
+
+## 4. Non-Functional Requirements
+
+## 4.1 Simplicity
+
+The architecture should remain simple and modular. Avoid unnecessary distributed complexity in the first version.
+
+## 4.2 Performance
+
+The platform should support concurrent discovery and scanning using Go workers and queues.
+
+## 4.3 Reliability
+
+Each task should be retryable and failures should be logged without stopping the whole run.
+
+## 4.4 Auditability
+
+The platform should store:
+
+* when a task started
+* when it ended
+* who triggered it
+* source of the data
+* raw evidence where needed
+
+## 4.5 Extensibility
+
+New enrichers, scanners, and analyzers should be added without changing the whole system.
+
+## 4.6 Safety controls
+
+The platform should support:
+
+* allowlist per identity
+* user approval before deep scans
+* configurable scan rate
+* API key controls for external sources
+
+---
+
+## 5. Simple Architecture
+
+Keep the architecture as a modular monolith at first.
+
+## 5.1 Main components
+
+### 1. API service
+
+Responsible for:
+
+* identity management
+* seed submission
+* run creation
+* results retrieval
+* trigger external enrichment
+
+### 2. Discovery engine
+
+Responsible for:
+
+* subnet derivation
+* domain enumeration
+* DNS resolution
+* deduplication
+* sending discovered assets to next stages
+
+### 3. Enrichment engine
+
+Responsible for:
+
+* IP metadata enrichment
+* DNS relationship storage
+* web crawling metadata
+* optional Shodan enrichment
+
+### 4. Scanner engine
+
+Responsible for:
+
+* SCADA-focused port scanning
+* banner grabbing
+* protocol identification
+
+### 5. Analysis engine
+
+Responsible for:
+
+* banner normalization
+* service classification
+* version extraction
+* finding generation
+* vulnerability matching
+
+### 6. Storage layer
+
+Responsible for storing:
+
+* identities
+* assets
+* DNS relationships
+* enrichment data
+* scan results
+* findings
+* run history
+
+### 7. Web UI
+
+Responsible for:
+
+* showing identities
+* starting discovery
+* viewing assets
+* reviewing findings
+* drilling into evidence
+
+---
+
+## 5.2 Data flow
+
+```text
+User
+  |
+  v
+Web UI / API
+  |
+  v
+Identity + Seed Input
+  |
+  v
+Discovery Engine
+  |------> Domain Enumeration
+  |------> DNS Resolution
+  |------> Subnet / IP Expansion
+  |
+  v
+Enrichment Engine
+  |------> Geo / ASN / Category
+  |------> Web Crawl Metadata
+  |------> Optional Shodan
+  |
+  v
+Scanner Engine
+  |------> SCADA Port Scan
+  |------> Banner Collection
+  |
+  v
+Analysis Engine
+  |------> Normalize Banners
+  |------> Classify Services
+  |------> Detect Findings
+  |
+  v
+Storage
+  |
+  v
+Web UI / Reports
+```
+
+---
+
+## 6. Suggested Go Services Structure
+
+For a simple implementation, this can start as one Go codebase with internal modules:
+
+```text
+/cmd/platform-api
+/internal/identity
+/internal/discovery
+/internal/dns
+/internal/enrichment
+/internal/crawler
+/internal/scanner
+/internal/banner
+/internal/analysis
+/internal/shodan
+/internal/store
+/internal/reporting
+/internal/jobs
+/internal/config
+```
+
+This keeps the system simple while making future extraction into microservices possible.
+
+---
+
+## 7. Suggested Processing Model
+
+Use a job-based pipeline.
+
+### Job types
+
+* identity discovery run
+* domain enumeration job
+* dns resolution job
+* ip enrichment job
+* crawl job
+* scan job
+* analysis job
+* shodan enrichment job
+
+### Execution model
+
+* API creates a run
+* jobs are inserted into an internal queue table or lightweight queue
+* worker pool processes jobs
+* results are persisted after each stage
+
+For the first version, even a PostgreSQL-backed jobs table is enough.
+
+---
+
+## 8. Core Data Objects
+
+At a high level, the platform will need these main entities:
+
+### Identity
+
+Represents the monitored organization or target.
+
+### Seed
+
+Original user input such as IP, CIDR, or domain.
+
+### Asset
+
+A discovered object such as IP, domain, subdomain, or web endpoint.
+
+### DNS Record
+
+Stores A, AAAA, and CNAME relationships.
+
+### Scan Result
+
+Stores open port, protocol, banner, and scan metadata.
+
+### Enrichment Record
+
+Stores ASN, geo, category, provider, and Shodan data.
+
+### Finding
+
+Stores the detected issue or risk.
+
+### Run
+
+Represents one execution of a discovery / scanning workflow.
+
+---
+
+## 9. Simple UI Requirements
+
+The UI should remain simple and analyst-friendly.
+
+### Main pages
+
+#### 1. Identity list
+
+* list all identities
+* show number of assets
+* show latest run
+* show total findings
+
+#### 2. Identity details
+
+* general info
+* known domains
+* known IPs
+* latest discoveries
+* quick stats
+
+#### 3. Run page
+
+* discovery progress
+* counts of found domains, subdomains, IPs
+* counts of scanned services
+* counts of findings
+
+#### 4. Assets page
+
+* filter by IP, domain, service, country, ASN, category
+* click into asset details
+
+#### 5. Findings page
+
+* filter by severity
+* filter by vendor or protocol
+* view raw evidence
+
+#### 6. Asset details page
+
+* IP/domain details
+* DNS chain
+* scan results
+* banners
+* Shodan enrichment
+* findings
+
+---
+
+## 10. Detection Logic Examples
+
+The analysis layer should support rules like:
+
+* exposed Modbus service on public IP
+* exposed DNP3 on public IP
+* engineering or HMI web login page detected
+* vendor/version identified and mapped to known weakness
+* suspicious remote administration exposed to internet
+* industrial protocol on cloud-hosted IP
+* same identity has multiple internet-exposed industrial assets
+
+This can begin as rule-based detection before moving to more advanced fingerprinting.
+
+---
+
+## 11. Configuration Requirements
+
+The platform should have configurable:
+
+* SCADA target ports
+* timeout values
+* concurrency values
+* DNS resolvers
+* crawl depth
+* Shodan API key
+* enabled analyzers
+* severity mapping
+* allowlist / denylist
+* max scan depth per run
+
+---
+
+## 12. Security Requirements for the Platform Itself
+
+Because this is a security product, it should also include:
+
+* authentication and RBAC
+* API key protection
+* audit logs
+* encrypted secrets storage
+* input validation
+* rate limits for user actions
+* separation between raw evidence and user notes
+* secure handling of third-party API credentials
+
+---
+
+## 13. MVP Scope
+
+For the first version, keep it focused on:
+
+* identity creation
+* seed submission
+* domain enumeration
+* DNS A / AAAA / CNAME extraction
+* IP enrichment with ASN and country
+* SCADA-focused TCP scanning
+* banner collection
+* simple banner analysis
+* manual Shodan enrichment
+* findings dashboard
+
+Do not start with:
+
+* very deep web crawling
+* full internet-scale scanning
+* advanced ML classification
+* too many external integrations
+* overly complex microservices
+
+---
+
+## 14. Future Enhancements
+
+Later versions can add:
+
+* historical asset tracking
+* diff between runs
+* screenshot collection for web HMIs
+* CVE mapping engine
+* vendor fingerprint library
+* UDP industrial probing
+* certificate collection
+* graph view of assets
+* alerting and notifications
+* report generation in PDF
+* analyst notes and case management
+
+---
+
+## 15. Recommended Simple Stack
+
+* **Backend:** Go
+* **API:** REST
+* **Database:** PostgreSQL
+* **Queue:** PostgreSQL jobs table or lightweight queue
+* **Frontend:** simple web UI
+* **Scanner execution:** Go workers
+* **External enrichment:** Shodan API
+
+---
+
+## 16. Final Architecture Recommendation
+
+Start with a **modular monolith in Go**:
+
+* one backend service
+* one PostgreSQL database
+* one worker subsystem
+* one web UI
+
+This is the simplest design that still gives you clean separation between:
+
+* discovery
+* enrichment
+* scanning
+* analysis
+* reporting
+
+It will be easier to build, test, and evolve.
+
+
