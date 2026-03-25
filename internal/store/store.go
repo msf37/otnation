@@ -1397,6 +1397,56 @@ func (s *Store) ListScanHistory(ctx context.Context, assetID uuid.UUID) ([]model
 	return history, nil
 }
 
+// ListDNSRecordsByIdentity returns all DNS A/AAAA records for an identity,
+// used to build IP↔domain links in the asset graph.
+func (s *Store) ListDNSRecordsByIdentity(ctx context.Context, identityID uuid.UUID) ([]models.DNSRecord, error) {
+	const q = `
+		SELECT id, identity_id, asset_id,
+		       record_type, name, value,
+		       COALESCE(resolved_ip,'') AS resolved_ip, created_at
+		FROM dns_records
+		WHERE identity_id = $1
+		  AND record_type IN ('A','AAAA')
+		ORDER BY asset_id, name`
+
+	rows, err := s.pool.Query(ctx, q, identityID)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListDNSRecordsByIdentity query: %w", err)
+	}
+	records, err := pgx.CollectRows(rows, pgx.RowToStructByName[models.DNSRecord])
+	if err != nil {
+		return nil, fmt.Errorf("store.ListDNSRecordsByIdentity scan: %w", err)
+	}
+	return records, nil
+}
+
+// GetAssetFindingCounts returns a map of asset_id → finding count for all
+// assets belonging to the given identity.
+func (s *Store) GetAssetFindingCounts(ctx context.Context, identityID uuid.UUID) (map[string]int, error) {
+	const q = `
+		SELECT asset_id::text, COUNT(*)::int AS cnt
+		FROM findings
+		WHERE identity_id = $1
+		GROUP BY asset_id`
+
+	rows, err := s.pool.Query(ctx, q, identityID)
+	if err != nil {
+		return nil, fmt.Errorf("store.GetAssetFindingCounts query: %w", err)
+	}
+	defer rows.Close()
+
+	counts := make(map[string]int)
+	for rows.Next() {
+		var assetID string
+		var cnt int
+		if err := rows.Scan(&assetID, &cnt); err != nil {
+			return nil, fmt.Errorf("store.GetAssetFindingCounts scan: %w", err)
+		}
+		counts[assetID] = cnt
+	}
+	return counts, rows.Err()
+}
+
 // InsertAuditLog records an audit event.
 func (s *Store) InsertAuditLog(ctx context.Context, entityType string, entityID uuid.UUID, action, actor string, details []byte) error {
 	const q = `

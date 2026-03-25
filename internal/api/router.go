@@ -150,6 +150,9 @@ func NewRouter(st *store.Store, cfg *config.Config) *mux.Router {
 	// Auto Scan
 	api.HandleFunc("/assets/{asset_id}/auto-scan", HandleAutoScan(st)).Methods(http.MethodPost)
 
+	// Quick Discover (graph UI)
+	api.HandleFunc("/assets/{asset_id}/quick-discover", HandleQuickDiscover(st)).Methods(http.MethodPost)
+
 	// PDF Report
 	api.HandleFunc("/identities/{id}/report.pdf", HandleGenerateReportPDF(st)).Methods(http.MethodGet)
 

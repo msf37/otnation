@@ -761,11 +761,66 @@ function renderRunPage(run, jobs, identityId) {
 /* -------------------------------------------------------------------------
    Component: renderAssetsPage
    ------------------------------------------------------------------------- */
-function renderAssetsPage(response, identityId, filters) {
+function renderAssetsPage(response, identityId, filters, view) {
   const assets = (response && response.assets) || [];
   const total  = (response && response.total) || 0;
   const page   = (response && response.page) || 1;
   const limit  = (response && response.limit) || 50;
+  const isGraph = view === 'graph';
+
+  // SVG icons for toggle buttons
+  const iconTable = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="12" height="3" rx="1"/><rect x="1" y="6" width="12" height="3" rx="1"/><rect x="1" y="11" width="12" height="2" rx="1"/></svg>`;
+  const iconGraph = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="2"/><circle cx="2" cy="2" r="1.5"/><circle cx="12" cy="2" r="1.5"/><circle cx="2" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><line x1="3.1" y1="3.1" x2="5.6" y2="5.6"/><line x1="10.9" y1="3.1" x2="8.4" y2="5.6"/><line x1="3.1" y1="10.9" x2="5.6" y2="8.4"/><line x1="10.9" y1="10.9" x2="8.4" y2="8.4"/></svg>`;
+
+  const filterBar = `
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label class="filter-label">Type</label>
+        <select class="filter-select" id="filter-type" onchange="App.filterAssets()">
+          <option value="">All types</option>
+          <option value="ip"        ${filters && filters.type === 'ip'        ? 'selected' : ''}>IP</option>
+          <option value="domain"    ${filters && filters.type === 'domain'    ? 'selected' : ''}>Domain</option>
+          <option value="subdomain" ${filters && filters.type === 'subdomain' ? 'selected' : ''}>Subdomain</option>
+          <option value="endpoint"  ${filters && filters.type === 'endpoint'  ? 'selected' : ''}>Endpoint</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Country</label>
+        <input class="filter-input" type="text" id="filter-country" placeholder="US, DE, GB..."
+          value="${Utils.escapeHtml((filters && filters.country) || '')}"
+          oninput="App.debouncedFilterAssets()" />
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">ASN</label>
+        <input class="filter-input" type="text" id="filter-asn" placeholder="AS number"
+          value="${Utils.escapeHtml((filters && filters.asn) || '')}"
+          oninput="App.debouncedFilterAssets()" />
+      </div>
+      <div class="filter-spacer"></div>
+      <div class="filter-results">${Utils.formatNumber(total)} assets</div>
+      <button class="btn btn-ghost btn-sm" onclick="App.clearAssetFilters()">Clear</button>
+      <div class="view-toggle">
+        <button class="view-btn ${!isGraph ? 'active' : ''}" title="Table view"  onclick="App.switchAssetView('table')">${iconTable}</button>
+        <button class="view-btn ${isGraph  ? 'active' : ''}" title="Network graph" onclick="App.switchAssetView('graph')">${iconGraph}</button>
+      </div>
+    </div>`;
+
+  if (isGraph) {
+    return filterBar + `
+      <div class="asset-graph-wrap" id="asset-graph-wrap">
+        <canvas id="asset-graph-canvas"></canvas>
+        <div class="graph-legend">
+          <div class="graph-legend-item"><svg width="10" height="10"><circle cx="5" cy="5" r="5" fill="#3b82f6"/></svg> IP Address</div>
+          <div class="graph-legend-item"><svg width="10" height="10"><circle cx="5" cy="5" r="5" fill="#f59e0b"/></svg> Domain</div>
+          <div class="graph-legend-item"><svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#8b5cf6"/></svg> Subdomain</div>
+          <div class="graph-legend-item"><svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#10b981"/></svg> Endpoint</div>
+          <div class="graph-legend-item"><svg width="22" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="rgba(59,130,246,0.7)" stroke-width="2"/></svg> DNS link</div>
+          <div class="graph-legend-item"><svg width="8" height="8"><circle cx="4" cy="4" r="4" fill="#ef4444"/></svg> Has findings</div>
+          <div class="graph-legend-item"><span style="font-size:10px;color:rgba(148,213,252,0.95)">☁</span> Cloud / CDN</div>
+        </div>
+        <div class="asset-graph-hint">Click a node to inspect &nbsp;·&nbsp; Drag to pan &nbsp;·&nbsp; Scroll to zoom</div>
+      </div>`;
+  }
 
   const rows = assets.length > 0
     ? assets.map(a => `
@@ -785,61 +840,23 @@ function renderAssetsPage(response, identityId, filters) {
           </td>
           <td>${Utils.escapeHtml(a.provenance || '—')}</td>
           <td title="${Utils.escapeHtml(Utils.formatISODate(a.created_at))}">${Utils.formatRelativeTime(a.created_at)}</td>
-          <td>
-            <a href="#/assets/${Utils.escapeHtml(a.id)}" class="btn btn-ghost btn-sm">View</a>
-          </td>
-        </tr>
-      `).join('')
+          <td><a href="#/assets/${Utils.escapeHtml(a.id)}" class="btn btn-ghost btn-sm">View</a></td>
+        </tr>`).join('')
     : `<tr><td colspan="8" style="padding:0">${renderEmptyState('No assets found', 'Adjust your filters or run a discovery.')}</td></tr>`;
 
-  return `
-    <div class="filter-bar">
-      <div class="filter-group">
-        <label class="filter-label">Type</label>
-        <select class="filter-select" id="filter-type" onchange="App.filterAssets()">
-          <option value="">All types</option>
-          <option value="ip" ${filters && filters.type === 'ip' ? 'selected' : ''}>IP</option>
-          <option value="domain" ${filters && filters.type === 'domain' ? 'selected' : ''}>Domain</option>
-          <option value="subdomain" ${filters && filters.type === 'subdomain' ? 'selected' : ''}>Subdomain</option>
-          <option value="endpoint" ${filters && filters.type === 'endpoint' ? 'selected' : ''}>Endpoint</option>
-        </select>
-      </div>
-      <div class="filter-group">
-        <label class="filter-label">Country</label>
-        <input class="filter-input" type="text" id="filter-country" placeholder="US, DE, GB..."
-          value="${Utils.escapeHtml((filters && filters.country) || '')}"
-          oninput="App.debouncedFilterAssets()" />
-      </div>
-      <div class="filter-group">
-        <label class="filter-label">ASN</label>
-        <input class="filter-input" type="text" id="filter-asn" placeholder="AS number"
-          value="${Utils.escapeHtml((filters && filters.asn) || '')}"
-          oninput="App.debouncedFilterAssets()" />
-      </div>
-      <div class="filter-spacer"></div>
-      <div class="filter-results">${Utils.formatNumber(total)} assets</div>
-      <button class="btn btn-ghost btn-sm" onclick="App.clearAssetFilters()">Clear</button>
-    </div>
-
+  return filterBar + `
     <div class="table-wrapper">
       <table class="data-table">
         <thead>
           <tr>
-            <th>Value</th>
-            <th>Type</th>
-            <th>Country</th>
-            <th>ASN / Org</th>
-            <th>Visibility</th>
-            <th>Provenance</th>
-            <th>Discovered</th>
-            <th>Actions</th>
+            <th>Value</th><th>Type</th><th>Country</th><th>ASN / Org</th>
+            <th>Visibility</th><th>Provenance</th><th>Discovered</th><th>Actions</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
-    ${total > limit ? renderPagination(page, Math.ceil(total / limit), limit, total) : ''}
-  `;
+    ${total > limit ? renderPagination(page, Math.ceil(total / limit), limit, total) : ''}`;
 }
 
 /* -------------------------------------------------------------------------
@@ -2509,6 +2526,7 @@ const App = {
   _currentPage: null,
   _currentParams: {},
   _assetFilters: {},
+  _assetView: 'graph',
   _findingFilters: {},
   _currentPage_num: 1,
   _currentIdentityId: null,
@@ -2746,6 +2764,7 @@ const App = {
     const { id } = params;
     this._currentIdentityId = id;
     this._assetFilters = {};
+    this._assetView = 'graph';
 
     let identity = null;
     try {
@@ -2767,14 +2786,29 @@ const App = {
 
   async _loadIdentityAssets(id) {
     const filters = this._assetFilters;
+    const view = this._assetView || 'table';
     const el = document.getElementById('page-content');
     if (!el) return;
     try {
-      const response = await this.api.listAssets(id, filters);
-      el.innerHTML = renderAssetsPage(response, id, filters);
+      const params = { ...filters };
+      if (view === 'graph') { params.limit = 1000; params.graph = 1; }
+      const response = await this.api.listAssets(id, params);
+      el.innerHTML = renderAssetsPage(response, id, filters, view);
+      if (view === 'graph') {
+        const assets        = (response && response.assets)         || [];
+        const findingCounts = (response && response.finding_counts) || {};
+        const dnsLinks      = (response && response.dns_links)      || [];
+        setTimeout(() => this._initAssetGraph(assets, findingCounts, dnsLinks, id), 50);
+      }
     } catch (err) {
       el.innerHTML = `<div class="empty-state"><div class="empty-state-title text-critical">Error loading assets</div><div class="empty-state-desc">${Utils.escapeHtml(err.message)}</div></div>`;
     }
+  },
+
+  switchAssetView(view) {
+    this._assetView = view;
+    const id = this._currentIdentityId || this._currentParams.id;
+    if (id) this._loadIdentityAssets(id);
   },
 
   filterAssets() {
@@ -4015,6 +4049,430 @@ const App = {
       toast.classList.add('toast-out');
       setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 200);
     }, 4000);
+  },
+
+  // -----------------------------------------------------------------------
+  // Asset Network Graph
+  // -----------------------------------------------------------------------
+  _initAssetGraph(assets, findingCounts, dnsLinks, identityId) {
+    const wrap = document.getElementById('asset-graph-wrap');
+    const canvas = document.getElementById('asset-graph-canvas');
+    if (!wrap || !canvas) return;
+
+    const W = wrap.clientWidth;
+    const H = wrap.clientHeight;
+    canvas.width  = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // ---- node colours & sizes by type ----
+    const NODE_COLORS = { ip: '#3b82f6', domain: '#f59e0b', subdomain: '#8b5cf6', endpoint: '#10b981', default: '#6b7280' };
+    const NODE_RADIUS = { ip: 9, domain: 11, subdomain: 7, endpoint: 6, default: 7 };
+
+    // ---- cloud/CDN detection (mirrors backend quickdiscover logic) ----
+    const CLOUD_ORG_PATTERNS = [
+      'amazon','aws','cloudflare','akamai','fastly','microsoft','azure',
+      'google','digitalocean','linode','vultr','choopa','ovh','hetzner',
+      'leaseweb','rackspace','cdn77','stackpath','imperva','incapsula',
+      'sucuri','zscaler','alibaba','aliyun','tencent','oracle cloud',
+      'ibm cloud','softlayer',
+    ];
+    const CLOUD_RDNS_PATTERNS = [
+      'amazonaws.com','compute.internal','googleusercontent.com',
+      'cloud.google.com','azure.com','cloudapp.net','cloudapp.azure.com',
+      'windows.net','cloudflare.com','fastly.net','akamaiedge.net',
+      'akadns.net','akamaihd.net','edgekey.net','edgesuite.net',
+      'digitalocean.com','linode.com','vultr.com','choopa.net',
+      'ovh.net','hetzner.com','hetzner.de',
+    ];
+    function isCloudAsset(a) {
+      if (a.is_cloud) return true;
+      const org = (a.asn_org || '').toLowerCase();
+      if (org && CLOUD_ORG_PATTERNS.some(p => org.includes(p))) return true;
+      const rdns = (a.reverse_dns || '').toLowerCase();
+      if (rdns && CLOUD_RDNS_PATTERNS.some(p => rdns.includes(p))) return true;
+      return false;
+    }
+
+    // ---- build node map ----
+    const nodeMap = {};
+    assets.forEach(a => {
+      nodeMap[a.id] = {
+        id: a.id, asset: a,
+        x: W / 2 + (Math.random() - 0.5) * W * 0.6,
+        y: H / 2 + (Math.random() - 0.5) * H * 0.6,
+        vx: 0, vy: 0,
+        r: NODE_RADIUS[a.type] || NODE_RADIUS.default,
+        color: NODE_COLORS[a.type] || NODE_COLORS.default,
+        label: a.value || a.id,
+        findingCount: findingCounts[a.id] || 0,
+        isCloud: a.type === 'ip' && isCloudAsset(a),
+      };
+    });
+    const nodes = Object.values(nodeMap);
+
+    // ---- build IP value → node lookup ----
+    const ipByValue = {};
+    nodes.forEach(n => { if (n.asset.type === 'ip') ipByValue[n.asset.value] = n; });
+
+    // ---- edges ----
+    const edgeSet = new Set();
+    const edges = [];
+
+    function addEdge(a, b, kind) {
+      const key = [a.id, b.id].sort().join(':');
+      if (!edgeSet.has(key)) {
+        edgeSet.add(key);
+        edges.push({ source: a, target: b, kind });
+      }
+    }
+
+    // subdomain → parent domain (suffix match)
+    const domainNodes = nodes.filter(n => n.asset.type === 'domain');
+    nodes.forEach(n => {
+      if (n.asset.type === 'subdomain') {
+        const parent = domainNodes.find(d => n.asset.value && n.asset.value.endsWith('.' + d.asset.value));
+        if (parent) addEdge(n, parent, 'subdomain');
+      }
+    });
+
+    // domain → IP via DNS A/AAAA records returned by server
+    dnsLinks.forEach(({ domain_asset_id, ip }) => {
+      const domainNode = nodeMap[domain_asset_id];
+      const ipNode = ipByValue[ip];
+      if (domainNode && ipNode) addEdge(domainNode, ipNode, 'dns');
+    });
+
+    // ---- simulation constants ----
+    const K  = 90;    // ideal spring length
+    const KS = 0.04;  // spring stiffness
+    const KR = 4000;  // repulsion constant
+    const DAMP = 0.82;
+    let running = true;
+    let animFrame;
+
+    function simulate() {
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i], b = nodes[j];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const f = KR / (dist * dist);
+          const fx = f * dx / dist, fy = f * dy / dist;
+          a.vx -= fx; a.vy -= fy;
+          b.vx += fx; b.vy += fy;
+        }
+      }
+      edges.forEach(({ source: a, target: b }) => {
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const f = KS * (dist - K);
+        const fx = f * dx / dist, fy = f * dy / dist;
+        a.vx += fx; a.vy += fy;
+        b.vx -= fx; b.vy -= fy;
+      });
+      const cx = W / 2, cy = H / 2;
+      nodes.forEach(n => {
+        n.vx += (cx - n.x) * 0.003;
+        n.vy += (cy - n.y) * 0.003;
+        n.vx *= DAMP; n.vy *= DAMP;
+        n.x += n.vx; n.y += n.vy;
+      });
+    }
+
+    // ---- pan / zoom ----
+    let pan = { x: 0, y: 0 }, zoom = 1;
+    let dragging = false, dragStart = { x: 0, y: 0 }, panStart = { x: 0, y: 0 };
+    let selectedNode = null;
+
+    function toWorld(cx, cy) { return { x: (cx - pan.x) / zoom, y: (cy - pan.y) / zoom }; }
+
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.1 : 0.9;
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      pan.x = mx - (mx - pan.x) * factor;
+      pan.y = my - (my - pan.y) * factor;
+      zoom *= factor;
+    }, { passive: false });
+
+    canvas.addEventListener('mousedown', (e) => {
+      dragging = true;
+      dragStart = { x: e.offsetX, y: e.offsetY };
+      panStart  = { x: pan.x, y: pan.y };
+    });
+    canvas.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      pan.x = panStart.x + (e.offsetX - dragStart.x);
+      pan.y = panStart.y + (e.offsetY - dragStart.y);
+    });
+    canvas.addEventListener('mouseup', (e) => {
+      const moved = Math.abs(e.offsetX - dragStart.x) + Math.abs(e.offsetY - dragStart.y);
+      dragging = false;
+      if (moved < 5) {
+        const w = toWorld(e.offsetX, e.offsetY);
+        let hit = null;
+        for (const n of nodes) {
+          const dx = n.x - w.x, dy = n.y - w.y;
+          if (Math.sqrt(dx * dx + dy * dy) <= n.r + 6) { hit = n; break; }
+        }
+        selectedNode = hit;
+        if (hit) showNodePanel(hit);
+        else { const p = document.getElementById('graph-node-panel'); if (p) p.remove(); }
+      }
+    });
+    canvas.addEventListener('mouseleave', () => { dragging = false; });
+
+    // ---- node info panel ----
+    function showNodePanel(node) {
+      let p = document.getElementById('graph-node-panel');
+      if (!p) {
+        p = document.createElement('div');
+        p.id = 'graph-node-panel';
+        p.className = 'graph-node-panel';
+        wrap.appendChild(p);
+      }
+      const asset = node.asset;
+      const fc = node.findingCount;
+      const typeLabels = { ip: 'IP Address', domain: 'Domain', subdomain: 'Subdomain', endpoint: 'Endpoint' };
+      const typeColors = { ip: '#3b82f6', domain: '#f59e0b', subdomain: '#8b5cf6', endpoint: '#10b981' };
+      const tc = typeColors[asset.type] || '#6b7280';
+
+      // Connected nodes via edges
+      const connected = edges
+        .filter(e => e.source.id === node.id || e.target.id === node.id)
+        .map(e => e.source.id === node.id ? e.target : e.source);
+
+      const connectedHTML = connected.length
+        ? `<div class="graph-panel-meta" style="margin-top:6px"><span style="color:var(--text-muted)">Linked to:</span>
+            ${connected.slice(0, 5).map(c =>
+              `<div style="font-family:var(--font-mono);font-size:11px;color:${typeColors[c.asset.type]||'#6b7280'};padding-top:2px">
+                ${Utils.escapeHtml(c.asset.value || c.id)}
+              </div>`
+            ).join('')}
+            ${connected.length > 5 ? `<div style="font-size:11px;color:var(--text-muted)">+${connected.length - 5} more</div>` : ''}
+          </div>`
+        : '';
+
+      const findingBadge = fc > 0
+        ? `<span style="background:#ef444422;color:#ef4444;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600;margin-left:6px">&#9888; ${fc} finding${fc > 1 ? 's' : ''}</span>`
+        : '';
+      const cloudBadge = node.isCloud
+        ? `<span style="background:#0ea5e922;color:#38bdf8;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600;margin-left:6px">&#9729; Cloud</span>`
+        : '';
+
+      p.innerHTML = `
+        <div class="graph-panel-header">
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">
+            <span style="background:${tc}22;color:${tc};font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600">${typeLabels[asset.type] || asset.type}</span>
+            ${findingBadge}
+            ${cloudBadge}
+          </div>
+          <button onclick="document.getElementById('graph-node-panel').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px;line-height:1;padding:0;flex-shrink:0">&times;</button>
+        </div>
+        <div class="graph-panel-value">${Utils.escapeHtml(asset.value || '—')}</div>
+        <div style="padding:6px 14px 0;display:flex;flex-direction:column;gap:3px">
+          ${asset.country_code ? `<div class="graph-panel-meta">Country: <strong>${Utils.escapeHtml(asset.country_code)}</strong></div>` : ''}
+          ${asset.asn ? `<div class="graph-panel-meta">ASN: <strong>AS${asset.asn}${asset.asn_org ? ' — ' + Utils.escapeHtml(asset.asn_org) : ''}</strong></div>` : ''}
+          ${asset.reverse_dns ? `<div class="graph-panel-meta">rDNS: <strong style="font-family:var(--font-mono);font-size:11px">${Utils.escapeHtml(asset.reverse_dns)}</strong></div>` : ''}
+          ${asset.is_public !== undefined ? `<div class="graph-panel-meta">Visibility: <strong>${asset.is_public ? 'Public' : 'Private'}</strong></div>` : ''}
+          ${asset.is_cloud ? `<div class="graph-panel-meta">Cloud: <strong>Yes</strong></div>` : ''}
+          ${asset.provenance ? `<div class="graph-panel-meta">Source: <strong>${Utils.escapeHtml(asset.provenance)}</strong></div>` : ''}
+          ${connectedHTML}
+        </div>
+        <div style="padding:10px 14px 12px;display:flex;flex-direction:column;gap:6px">
+          <button class="btn btn-sm" id="graph-discover-btn"
+            style="display:block;text-align:center;background:var(--accent-green,#10b981);color:#fff;border:none;cursor:pointer;border-radius:var(--border-radius-sm);padding:6px 0;font-size:12px;font-weight:600"
+            onclick="App.triggerQuickDiscover('${asset.id}','${Utils.escapeHtml(asset.type)}')">
+            &#128270; Discover
+          </button>
+          <a class="btn btn-sm btn-primary" style="display:block;text-align:center" href="#/assets/${asset.id}">Explore Asset</a>
+        </div>
+        <div id="graph-discover-result" style="display:none;padding:0 14px 12px;font-size:11px;color:var(--text-muted)"></div>
+      `;
+    }
+
+    // ---- draw ----
+    const EDGE_COLORS = { dns: 'rgba(59,130,246,0.35)', subdomain: 'rgba(139,92,246,0.25)', default: 'rgba(148,163,184,0.2)' };
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      ctx.save();
+      ctx.translate(pan.x, pan.y);
+      ctx.scale(zoom, zoom);
+
+      // edges
+      edges.forEach(({ source: a, target: b, kind }) => {
+        ctx.beginPath();
+        ctx.strokeStyle = EDGE_COLORS[kind] || EDGE_COLORS.default;
+        ctx.lineWidth = (kind === 'dns' ? 1.5 : 1) / zoom;
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      });
+
+      // nodes
+      nodes.forEach(n => {
+        const selected = selectedNode && selectedNode.id === n.id;
+
+        // selection glow
+        if (selected) {
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, n.r + 5, 0, Math.PI * 2);
+          ctx.fillStyle = n.color + '55';
+          ctx.fill();
+        }
+
+        // main circle
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        ctx.fillStyle = n.color;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.lineWidth = 1.5 / zoom;
+        ctx.stroke();
+
+        // red finding indicator (top-right of node)
+        if (n.findingCount > 0) {
+          const ir = Math.max(4, 5 / zoom);
+          const ix = n.x + n.r * 0.7;
+          const iy = n.y - n.r * 0.7;
+          ctx.beginPath();
+          ctx.arc(ix, iy, ir, 0, Math.PI * 2);
+          ctx.fillStyle = '#ef4444';
+          ctx.fill();
+          ctx.strokeStyle = '#1e293b';
+          ctx.lineWidth = 1.2 / zoom;
+          ctx.stroke();
+          // count label inside dot (only if zoomed in and small count)
+          if (zoom > 0.7 && n.findingCount <= 9) {
+            ctx.fillStyle = '#fff';
+            ctx.font = `bold ${Math.round(7 / zoom)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(String(n.findingCount), ix, iy);
+            ctx.textBaseline = 'alphabetic';
+          }
+        }
+
+        // cloud icon (bottom-left of node)
+        if (n.isCloud) {
+          const cs = Math.round(Math.max(9, 11 / zoom));
+          ctx.font = `${cs}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = 'rgba(148,213,252,0.95)'; // sky blue tint
+          ctx.fillText('☁', n.x - n.r * 0.65, n.y + n.r * 0.65);
+          ctx.textBaseline = 'alphabetic';
+        }
+
+        // label
+        if (zoom > 0.45) {
+          ctx.fillStyle = selected ? '#f1f5f9' : 'rgba(203,213,225,0.85)';
+          ctx.font = `${Math.round(10 / zoom)}px var(--font-mono, monospace)`;
+          ctx.textAlign = 'center';
+          const maxLen = 22;
+          const lbl = n.label.length > maxLen ? n.label.slice(0, maxLen) + '…' : n.label;
+          ctx.fillText(lbl, n.x, n.y + n.r + Math.round(13 / zoom));
+        }
+      });
+
+      ctx.restore();
+    }
+
+    let tick = 0;
+    function loop() {
+      if (!running) return;
+      if (tick < 300) { simulate(); tick++; }
+      draw();
+      animFrame = requestAnimationFrame(loop);
+    }
+
+    const obs = new MutationObserver(() => {
+      if (!document.getElementById('asset-graph-wrap')) {
+        running = false;
+        cancelAnimationFrame(animFrame);
+        obs.disconnect();
+      }
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+
+    loop();
+  },
+
+  // -----------------------------------------------------------------------
+  // Quick Discover (graph node panel)
+  // -----------------------------------------------------------------------
+  async triggerQuickDiscover(assetId, assetType) {
+    const btn = document.getElementById('graph-discover-btn');
+    const resultEl = document.getElementById('graph-discover-result');
+    if (!btn || !resultEl) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Discovering…';
+    resultEl.style.display = 'none';
+    resultEl.innerHTML = '';
+
+    try {
+      const res = await this.api.post(`/assets/${assetId}/quick-discover`, {});
+
+      const newCount  = (res.new_assets  || []).length;
+      const rdnsCount = (res.dns_links   || []).length;
+      const subCount  = (res.subdomains  || []).length;
+
+      let html = `<div style="color:var(--accent-green,#10b981);font-weight:600;margin-bottom:4px">&#10003; Discovery complete</div>`;
+      html += `<div>${res.message || ''}</div>`;
+
+      if (newCount > 0) {
+        html += `<div style="margin-top:6px;color:var(--text-secondary)"><strong>${newCount}</strong> new IP${newCount > 1 ? 's' : ''} found:</div>`;
+        html += `<div style="font-family:var(--font-mono);margin-top:2px">`;
+        (res.new_assets || []).slice(0, 8).forEach(a => {
+          html += `<div style="padding:1px 0">${Utils.escapeHtml(a.value)}</div>`;
+        });
+        if (newCount > 8) html += `<div style="color:var(--text-muted)">+${newCount - 8} more</div>`;
+        html += `</div>`;
+      }
+
+      if (rdnsCount > 0) {
+        html += `<div style="margin-top:6px;color:var(--text-secondary)"><strong>${rdnsCount}</strong> reverse DNS hit${rdnsCount > 1 ? 's' : ''}:</div>`;
+        html += `<div style="font-family:var(--font-mono);margin-top:2px">`;
+        (res.dns_links || []).slice(0, 5).forEach(d => {
+          html += `<div style="padding:1px 0;color:var(--text-muted)">${Utils.escapeHtml(d.ip)} → ${Utils.escapeHtml(d.hostname)}</div>`;
+        });
+        if (rdnsCount > 5) html += `<div style="color:var(--text-muted)">+${rdnsCount - 5} more</div>`;
+        html += `</div>`;
+      }
+
+      if (subCount > 0) {
+        html += `<div style="margin-top:6px;color:var(--text-secondary)"><strong>${subCount}</strong> subdomain${subCount > 1 ? 's' : ''} found:</div>`;
+        html += `<div style="font-family:var(--font-mono);margin-top:2px">`;
+        (res.subdomains || []).slice(0, 6).forEach(s => {
+          html += `<div style="padding:1px 0">${Utils.escapeHtml(s.value)}</div>`;
+        });
+        if (subCount > 6) html += `<div style="color:var(--text-muted)">+${subCount - 6} more</div>`;
+        html += `</div>`;
+      }
+
+      if (newCount === 0 && rdnsCount === 0 && subCount === 0) {
+        html += `<div style="margin-top:4px;color:var(--text-muted)">No new assets found.</div>`;
+      } else {
+        // Reload the graph to show new nodes
+        html += `<button class="btn btn-sm" style="margin-top:8px;width:100%;font-size:11px" onclick="App.switchAssetView('graph')">Refresh graph</button>`;
+      }
+
+      resultEl.innerHTML = html;
+      resultEl.style.display = 'block';
+
+      btn.textContent = '↺ Discover again';
+      btn.disabled = false;
+
+    } catch (err) {
+      resultEl.innerHTML = `<div style="color:var(--text-critical,#ef4444)">${Utils.escapeHtml(err.message)}</div>`;
+      resultEl.style.display = 'block';
+      btn.textContent = '&#128270; Discover';
+      btn.disabled = false;
+    }
   },
 
   // -----------------------------------------------------------------------

@@ -1660,6 +1660,172 @@ code, pre {
 }
 
 /* -------------------------------------------------------------------------
+   Asset View Toggle
+   ------------------------------------------------------------------------- */
+.view-toggle {
+  display: flex;
+  gap: 2px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius-sm);
+  padding: 2px;
+}
+
+.view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 3px;
+  color: var(--text-muted);
+  transition: background var(--transition), color var(--transition);
+}
+
+.view-btn:hover { color: var(--text-primary); }
+
+.view-btn.active {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+/* -------------------------------------------------------------------------
+   Asset Graph
+   ------------------------------------------------------------------------- */
+.asset-graph-wrap {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  height: calc(100vh - 220px);
+  min-height: 500px;
+}
+
+.asset-graph-wrap canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.asset-graph-hint {
+  position: absolute;
+  bottom: 12px;
+  left: 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.graph-legend {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.graph-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* Asset node info panel */
+.graph-node-panel {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 240px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  animation: panel-in .15s ease;
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.graph-node-panel-header {
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.graph-node-panel-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  word-break: break-all;
+  margin-bottom: 4px;
+}
+
+.graph-node-panel-body {
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.graph-node-panel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.graph-node-panel-key {
+  color: var(--text-muted);
+}
+
+.graph-node-panel-val {
+  color: var(--text-secondary);
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.graph-node-panel-footer {
+  padding: 8px 14px 10px;
+  border-top: 1px solid var(--border);
+}
+
+.graph-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.graph-panel-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  word-break: break-all;
+  padding: 8px 14px 0;
+}
+
+.graph-panel-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 3px 14px 0;
+}
+
+/* -------------------------------------------------------------------------
    Asset Detail Layout
    ------------------------------------------------------------------------- */
 .asset-detail-layout {

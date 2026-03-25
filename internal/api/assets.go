@@ -14,14 +14,23 @@ import (
 
 // assetsResponse wraps the list result with pagination metadata.
 type assetsResponse struct {
-	Total  int64       `json:"total"`
-	Page   int         `json:"page"`
-	Limit  int         `json:"limit"`
-	Assets interface{} `json:"assets"`
+	Total         int64              `json:"total"`
+	Page          int                `json:"page"`
+	Limit         int                `json:"limit"`
+	Assets        interface{}        `json:"assets"`
+	FindingCounts map[string]int     `json:"finding_counts,omitempty"`
+	DNSLinks      []dnsLink          `json:"dns_links,omitempty"`
+}
+
+// dnsLink represents a resolved IP address belonging to a domain asset,
+// used to draw edges between domain and IP nodes in the graph view.
+type dnsLink struct {
+	DomainAssetID string `json:"domain_asset_id"`
+	IP            string `json:"ip"`
 }
 
 // HandleListAssets handles GET /api/v1/identities/{id}/assets.
-// Query params: type, country, asn, page, limit.
+// Query params: type, country, asn, page, limit, graph (1 = include graph extras).
 func HandleListAssets(st *store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		identityID, err := parseUUID(mux.Vars(r)["id"])
@@ -74,12 +83,37 @@ func HandleListAssets(st *store.Store) http.HandlerFunc {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, assetsResponse{
+		resp := assetsResponse{
 			Total:  total,
 			Page:   page,
 			Limit:  limit,
 			Assets: assets,
-		})
+		}
+
+		// Graph extras: finding counts and DNS links.
+		if q.Get("graph") == "1" {
+			findingCounts, err := st.GetAssetFindingCounts(r.Context(), identityID)
+			if err == nil {
+				resp.FindingCounts = findingCounts
+			}
+
+			dnsRecords, err := st.ListDNSRecordsByIdentity(r.Context(), identityID)
+			if err == nil {
+				seen := make(map[string]bool)
+				for _, rec := range dnsRecords {
+					key := rec.AssetID.String() + ":" + rec.Value
+					if !seen[key] && rec.Value != "" {
+						resp.DNSLinks = append(resp.DNSLinks, dnsLink{
+							DomainAssetID: rec.AssetID.String(),
+							IP:            rec.Value,
+						})
+						seen[key] = true
+					}
+				}
+			}
+		}
+
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 
